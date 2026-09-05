@@ -104,7 +104,8 @@ export function collectorMain() {
       !n.includes('\\') && !n.split('/').includes('..') && !/[\x00-\x1f]/.test(n)), 'unsafe_log_members');
     const lines = [];
     for (const member of members) {
-      const m = /^(record \((?:base|head), [a-f0-9]{40}\))\/\d+_(Post Start trusted sensor using OIDC only)\.txt$/.exec(member);
+      const m = /^(record \((?:base|head), [a-f0-9]{40}\))\/\d+_(Post Start trusted sensor using OIDC only|Initialize diagnostic receipt)\.txt$/.exec(member) ||
+        /^(verify)\/\d+_(Validate complete profiles and exact provenance)\.txt$/.exec(member);
       if (!m) continue;
       const text = execFileSync('unzip', ['-p', logZip, member], {encoding: 'utf8', timeout: 30000,
         maxBuffer: 8 * MB, stdio: ['ignore', 'pipe', 'pipe']});
@@ -113,7 +114,7 @@ export function collectorMain() {
     const log = lines.join('\n') + '\n';
     assert(Buffer.byteLength(log) <= 16 * MB, 'oversized_hosted_locator_logs');
     fs.writeFileSync(path.join(root, 'run.log'), log, {flag: 'wx', mode: 0o600});
-  } catch { /* Hosted locators remain unverified/absent; capture status is unaffected. */ }
+  } catch { /* Hosted locators stay optional; required controller-image headers fail closed in the publisher. */ }
   const output = path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'garnet-dependabot-publication');
   fs.mkdirSync(output, {recursive: true, mode: 0o700});
   try {
@@ -121,7 +122,8 @@ export function collectorMain() {
       '--evidence', root, '--publish']);
     fs.writeFileSync(path.join(output, 'collector-result.json'), JSON.stringify({
       repository: repo, pr, run_id: runId, run_attempt: run.run_attempt,
-      recording_verified: preview.verified, security_verdict: 'HOLD',
+      recording_verified: preview.recording_verified === undefined ? preview.verified : preview.recording_verified,
+      comparison_matched: preview.comparison_matched, security_verdict: 'HOLD',
     }, null, 2) + '\n', {mode: 0o600});
   } finally {
     for (const name of ['publisher-preview.md', 'publisher-preview.json', 'publisher-result.json']) {
